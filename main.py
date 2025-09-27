@@ -1518,7 +1518,7 @@ async def handle_text(message: Message):
                 await bot.forward_message(chat_id=int(group_id), from_chat_id=msg['chat_id'], message_id=msg['message_id'])
             except Exception as e:
                 logging.error(f"Error forwarding to {group_id}: {e}")
-        await message.reply("✅ Рассылка начата. Сообщение отправлено сразу во все группы и будет повторяться каждые 15 минут.", parse_mode="HTML")
+        await message.reply("✅ Рассылка начата. Сообщение отправлено сразу во все группы и будет повторяться каждые 2.5 минуты.", parse_mode="HTML")
     elif data['users'][user_id].get('current_screen') == 'enter_channel':
         selected_type = data['users'][user_id].get('selected_type', '')
 
@@ -1578,7 +1578,7 @@ async def send_broadcast():
                     await bot.forward_message(chat_id=int(group_id), from_chat_id=msg['chat_id'], message_id=msg['message_id'])
                 except Exception as e:
                     logging.error(f"Error forwarding to {group_id}: {e}")
-        await asyncio.sleep(900)  # 15 минут
+        await asyncio.sleep(150)  # 2.5 минуты
 
 # Запуск бота
 async def main():
