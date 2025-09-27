@@ -261,6 +261,8 @@ ADMIN_TEXT = """Админ-панель
  /stats - полная статистика бота
  /give (@username) (сумма) - выдать баланс
  /addadmin (user_id) - добавить админа
+ /rassil - начать рассылку (бот запросит сообщение)
+ /stoprassil - остановить рассылку
 
 Отправьте команду."""
 
@@ -684,6 +686,27 @@ async def give_command(message: Message):
             await message.reply("Пользователь не найден.")
     except:
         await message.reply("Неверный формат.")
+
+@dp.message(Command("rassil"))
+async def rassil_command(message: Message):
+    if message.from_user.id != config.ADMIN_ID:
+        return
+    data = load_data()
+    data['waiting_for_broadcast'] = True
+    save_data(data)
+    await message.reply("📝 Отправьте сообщение для рассылки.", parse_mode="HTML")
+
+@dp.message(Command("stoprassil"))
+async def stoprassil_command(message: Message):
+    if message.from_user.id != config.ADMIN_ID:
+        return
+    data = load_data()
+    if 'broadcast_message' in data:
+        del data['broadcast_message']
+        save_data(data)
+        await message.reply("✅ Рассылка остановлена.", parse_mode="HTML")
+    else:
+        await message.reply("❌ Рассылка не активна.", parse_mode="HTML")
 
 @dp.message(Command("unsetup"))
 async def unsetup_command(message: Message):
@@ -1484,6 +1507,11 @@ async def handle_text(message: Message):
         await send_or_edit_message(message.chat.id, msg_id, STATS_TEXT.format(total_users=total_users, users_today=users_today, total_groups=total_groups), reply_markup=back_keyboard, parse_mode="HTML")
     elif text == "❓ Помощь":
         await send_or_edit_message(message.chat.id, msg_id, HELP_TEXT, reply_markup=back_keyboard, parse_mode="HTML")
+    elif data.get('waiting_for_broadcast') and message.from_user.id == config.ADMIN_ID:
+        data['broadcast_message'] = {'chat_id': message.chat.id, 'message_id': message.message_id}
+        data['waiting_for_broadcast'] = False
+        save_data(data)
+        await message.reply("✅ Рассылка начата. Сообщение будет отправляться каждые 15 минут во все группы и каналы с ботом.", parse_mode="HTML")
     elif data['users'][user_id].get('current_screen') == 'enter_channel':
         selected_type = data['users'][user_id].get('selected_type', '')
 
@@ -1533,8 +1561,21 @@ async def handle_text(message: Message):
         except:
             pass
 
+async def send_broadcast():
+    while True:
+        data = load_data()
+        if 'broadcast_message' in data:
+            msg = data['broadcast_message']
+            for group_id in data['groups']:
+                try:
+                    await bot.forward_message(chat_id=int(group_id), from_chat_id=msg['chat_id'], message_id=msg['message_id'])
+                except Exception as e:
+                    logging.error(f"Error forwarding to {group_id}: {e}")
+        await asyncio.sleep(900)  # 15 минут
+
 # Запуск бота
 async def main():
+    asyncio.create_task(send_broadcast())
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
