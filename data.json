@@ -1,0 +1,111 @@
+{
+    "users": {
+        "8217088275": {
+            "balance": 4999346,
+            "referrer": null,
+            "channels": [],
+            "message_id": 1925,
+            "referrals": 0,
+            "earned": 0,
+            "current_screen": "balance",
+            "ref_code": "V6EDeTr",
+            "username": "likkerro",
+            "selected_period": "1d",
+            "invoice_id": 34400151,
+            "active_ads": [
+                {
+                    "channel": "@gfdgddg",
+                    "period": "1w",
+                    "expiry": "2025-10-04T19:23:02.454672"
+                },
+                {
+                    "post": {
+                        "chat_id": "@channel",
+                        "message_id": 123
+                    },
+                    "type": "post",
+                    "period": "1w",
+                    "expiry": "2025-10-04T19:59:55.717692"
+                },
+                {
+                    "channel": "@sdfsfbot",
+                    "type": "bot",
+                    "period": "1w",
+                    "expiry": "2025-10-04T20:05:54.166913"
+                },
+                {
+                    "channel": "@gfdgdfg",
+                    "type": "group",
+                    "period": "1d",
+                    "expiry": "2025-09-28T20:06:04.791185"
+                },
+                {
+                    "channel": "@fgfdgdfg",
+                    "type": "group",
+                    "period": "1m",
+                    "expiry": "2025-10-27T20:06:15.637511"
+                },
+                {
+                    "channel": "@gfgdfg",
+                    "type": "bot",
+                    "period": "1d",
+                    "expiry": "2025-09-28T20:42:39.890939"
+                },
+                {
+                    "channel": "@myrentbot",
+                    "type": "bot",
+                    "period": "1d",
+                    "expiry": "2025-09-28T20:45:46.635956"
+                },
+                {
+                    "channel": "@myerentrdbot",
+                    "type": "bot",
+                    "period": "1d",
+                    "expiry": "2025-09-28T21:01:36.610524"
+                }
+            ],
+            "selected_type": "group"
+        },
+        "1076328217": {
+            "balance": 0,
+            "referrer": null,
+            "channels": [],
+            "message_id": 1928,
+            "referrals": 0,
+            "earned": 0,
+            "ref_code": "HmN0oAP",
+            "current_screen": "balance",
+            "username": "mamatov_tg"
+        }
+    },
+    "groups": {
+        "-1003105608723": {
+            "channels": {
+                "@likkerrochat": {
+                    "expiry": "2025-09-27T22:57:42.635554",
+                    "people": 0
+                }
+            },
+            "posts": {
+                "@channel_123": {
+                    "chat_id": "@channel",
+                    "message_id": 123,
+                    "expiry": "2025-10-04T19:59:55.717692",
+                    "people": 0
+                }
+            }
+        },
+        "-1002842279833": {
+            "channels": {}
+        }
+    },
+    "admins": [
+        8217088275
+    ],
+    "stats": {
+        "total_users": 2,
+        "total_channels": 0,
+        "total_balance": 5000000,
+        "users_today": 1
+    }
+}
