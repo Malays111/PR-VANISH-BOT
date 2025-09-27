@@ -1,0 +1,15 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "python main.py"
+
+[build.env]
+PYO3_USE_ABI3_FORWARD_COMPATIBILITY = "1"
+
+[deploy.env]
+BOT_TOKEN = ""
+ADMIN_ID = ""
+PHOTO_URL = ""
+CRYPTOBOT_TOKEN = ""
+TON_API_KEY = ""
