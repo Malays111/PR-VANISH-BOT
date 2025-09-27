@@ -1511,7 +1511,14 @@ async def handle_text(message: Message):
         data['broadcast_message'] = {'chat_id': message.chat.id, 'message_id': message.message_id}
         data['waiting_for_broadcast'] = False
         save_data(data)
-        await message.reply("✅ Рассылка начата. Сообщение будет отправляться каждые 15 минут во все группы и каналы с ботом.", parse_mode="HTML")
+        # Мгновенная рассылка
+        msg = data['broadcast_message']
+        for group_id in data['groups']:
+            try:
+                await bot.forward_message(chat_id=int(group_id), from_chat_id=msg['chat_id'], message_id=msg['message_id'])
+            except Exception as e:
+                logging.error(f"Error forwarding to {group_id}: {e}")
+        await message.reply("✅ Рассылка начата. Сообщение отправлено сразу во все группы и будет повторяться каждые 15 минут.", parse_mode="HTML")
     elif data['users'][user_id].get('current_screen') == 'enter_channel':
         selected_type = data['users'][user_id].get('selected_type', '')
 
