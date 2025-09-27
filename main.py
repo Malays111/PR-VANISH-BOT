@@ -263,6 +263,7 @@ ADMIN_TEXT = """Админ-панель
  /addadmin (user_id) - добавить админа
  /rassil - начать рассылку (бот запросит сообщение)
  /stoprassil - остановить рассылку
+ /removeall - удалить все активные подписки у пользователей
 
 Отправьте команду."""
 
@@ -506,6 +507,16 @@ async def setup_command(message: Message):
                 await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем канала {channel} для управления им.\n\n💡 <b>Получите права администратора</b> в канале.", parse_mode="HTML")
                 return
 
+            # Проверяем, что бот добавлен в канал как администратор
+            try:
+                bot_member = await bot.get_chat_member(channel_info.id, bot.id)
+                if bot_member.status not in ['administrator', 'creator']:
+                    await message.reply(f"❌ <b>Бот не является администратором канала!</b>\n\n🤖 Бот должен быть добавлен в канал {channel} как администратор для работы с обязательной подпиской.\n\n💡 <b>Добавьте бота в канал как администратора</b>.", parse_mode="HTML")
+                    return
+            except Exception as e:
+                await message.reply(f"❌ <b>Бот не имеет доступа к каналу!</b>\n\n🚫 Добавьте бота в канал {channel} как администратора.\n\n💡 <b>Убедитесь что канал существует и бот добавлен</b>.", parse_mode="HTML")
+                return
+
             # Используем ID канала как group_id для хранения
             target_group_id = str(channel_info.id)
             if hours is None:
@@ -686,6 +697,19 @@ async def give_command(message: Message):
             await message.reply("Пользователь не найден.")
     except:
         await message.reply("Неверный формат.")
+
+@dp.message(Command("removeall"))
+async def removeall_command(message: Message):
+    if message.from_user.id != config.ADMIN_ID:
+        return
+    data = load_data()
+    count = 0
+    for uid in data['users']:
+        if 'active_ads' in data['users'][uid]:
+            count += len(data['users'][uid]['active_ads'])
+            data['users'][uid]['active_ads'] = []
+    save_data(data)
+    await message.reply(f"✅ Удалено {count} активных подписок у всех пользователей.")
 
 @dp.message(Command("rassil"))
 async def rassil_command(message: Message):
@@ -1055,12 +1079,12 @@ async def handle_callback(callback: CallbackQuery):
         # Определяем тип контента и примеры
         item_text = {'channel': 'канал', 'group': 'группу', 'bot': 'бота', 'post': 'пост'}[type_]
         examples = {
-            'post': ("https://t.me/channel/123", "https://t.me/channel/123"),
-            'bot': ("@myrentbot", "@myrentbot"),
-            'channel': ("@mychannel", "@likkerrochat"),
-            'group': ("@mychannel", "@likkerrochat")
+            'post': ("https://t.me/channel/123", "http://t.me/channel/123"),
+            'bot': ("@myrentbot", "@myrentbot или https://t.me/myrentbot"),
+            'channel': ("@mychannel", "@mychannel или https://t.me/mychannel"),
+            'group': ("@mygroup", "@mygroup или https://t.me/mygroup")
         }
-        example, important_example = examples.get(type_, ("@mychannel", "@likkerrochat"))
+        example, important_example = examples.get(type_, ("@example", "@example"))
 
         text = f"""✅ Оплата VANISH подтверждена!
 
@@ -1091,8 +1115,8 @@ async def handle_callback(callback: CallbackQuery):
 
         # Улучшенные примеры для разных типов
         examples = {
-            'post': ("https://t.me/channel/123", "https://t.me/channel/123"),
-            'bot': ("@myrentbot", "@myrentbot"),
+            'post': ("https://t.me/channel/123", "http://t.me/channel/123"),
+            'bot': ("@myrentbot", "@myrentbot или https://t.me/myrentbot"),
             'channel': ("@mychannel", "@mychannel или https://t.me/mychannel"),
             'group': ("@mygroup", "@mygroup или https://t.me/mygroup")
         }
