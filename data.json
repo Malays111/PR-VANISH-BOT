@@ -104,6 +104,7 @@
         "total_users": 2,
         "total_channels": 0,
         "total_balance": 5000000,
-        "users_today": 1
+        "users_today": 0,
+        "last_reset_date": "2025-09-28"
     }
 }

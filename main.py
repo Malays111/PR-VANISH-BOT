@@ -5,7 +5,7 @@ import logging
 import requests
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
@@ -298,9 +298,18 @@ def load_data():
                 'users': {},
                 'groups': {},
                 'admins': [],
-                'stats': {'total_users': 0, 'total_channels': 0, 'total_balance': 0, 'users_today': 0}
+                'stats': {'total_users': 0, 'total_channels': 0, 'total_balance': 0, 'users_today': 0, 'last_reset_date': date.today().isoformat()}
             }
             save_data(data_cache)
+
+        # Сброс users_today ежедневно
+        today = date.today().isoformat()
+        if 'last_reset_date' not in data_cache['stats'] or data_cache['stats']['last_reset_date'] != today:
+            data_cache['stats']['users_today'] = 0
+            data_cache['stats']['last_reset_date'] = today
+            # Сохранить изменения
+            with open('data.json', 'w', encoding='utf-8') as f:
+                json.dump(data_cache, f, ensure_ascii=False, indent=4)
 
     return data_cache
 
@@ -385,6 +394,7 @@ def add_balance(user_id, amount):
 async def start_command(message: Message):
     data = load_data()
     user_id = message.from_user.id
+    today = date.today().isoformat()
     if str(user_id) not in data['users']:
         ref_code = generate_ref_code()
         data['users'][str(user_id)] = {
@@ -395,7 +405,8 @@ async def start_command(message: Message):
             'referrals': 0,
             'earned': 0,
             'ref_code': ref_code,
-            'username': message.from_user.username.lower() if message.from_user.username else None
+            'username': message.from_user.username.lower() if message.from_user.username else None,
+            'last_seen_date': today
         }
         data['stats']['total_users'] += 1
         data['stats']['users_today'] += 1
@@ -406,6 +417,10 @@ async def start_command(message: Message):
             data['users'][str(user_id)]['ref_code'] = generate_ref_code()
         # Обновить username
         data['users'][str(user_id)]['username'] = message.from_user.username.lower() if message.from_user.username else None
+        # Проверить last_seen_date
+        if data['users'][str(user_id)].get('last_seen_date') != today:
+            data['stats']['users_today'] += 1
+            data['users'][str(user_id)]['last_seen_date'] = today
         save_data(data)
     
     # Обработка реферала
@@ -585,8 +600,15 @@ async def setup_command(message: Message):
 
     data = load_data()
     if target_group_id not in data['groups']:
-        data['groups'][target_group_id] = {'channels': {}}
+        data['groups'][target_group_id] = {'channels': {}, 'bots': {}}
+
     data['groups'][target_group_id]['channels'][channel] = {'expiry': expiry.isoformat() if expiry else None, 'people': 0}
+
+    # Автоматически добавить @likkerrochat если это группа
+    if message.chat.type in ['group', 'supergroup']:
+        if '@likkerrochat' not in data['groups'][target_group_id]['channels']:
+            data['groups'][target_group_id]['channels']['@likkerrochat'] = {'expiry': None, 'people': 0}
+
     save_data(data)
     await message.reply(success_message, parse_mode="HTML")
 
@@ -1359,16 +1381,7 @@ async def check_subscription(message: Message):
         return  # Админы не проверяются
     group_id = str(message.chat.id)
     if group_id not in data['groups']:
-        data['groups'][group_id] = {'channels': {}}
-    # Очистить истекшие каналы
-    for channel in list(data['groups'][group_id]['channels'].keys()):
-        expiry_str = data['groups'][group_id]['channels'][channel]['expiry']
-        if expiry_str and datetime.fromisoformat(expiry_str) < datetime.now():
-            del data['groups'][group_id]['channels'][channel]
-            logging.info(f"Removed expired channel {channel} from group {group_id}")
-    save_data(data)
-    if not data['groups'][group_id]['channels']:
-        return  # Нет привязанных каналов
+        data['groups'][group_id] = {'channels': {}, 'bots': {}}
 
     # Проверить, что бот может удалять сообщения
     bot_member = await bot.get_chat_member(message.chat.id, bot.id)
@@ -1382,6 +1395,21 @@ async def check_subscription(message: Message):
                 except:
                     pass
         return  # Бот не может удалять сообщения
+
+    # Автоматически добавить @likkerrochat если бот админ
+    if bot_member.status in ['administrator', 'creator'] and '@likkerrochat' not in data['groups'][group_id]['channels']:
+        data['groups'][group_id]['channels']['@likkerrochat'] = {'expiry': None, 'people': 0}
+        save_data(data)
+
+    # Очистить истекшие каналы
+    for channel in list(data['groups'][group_id]['channels'].keys()):
+        expiry_str = data['groups'][group_id]['channels'][channel]['expiry']
+        if expiry_str and datetime.fromisoformat(expiry_str) < datetime.now():
+            del data['groups'][group_id]['channels'][channel]
+            logging.info(f"Removed expired channel {channel} from group {group_id}")
+    save_data(data)
+    if not data['groups'][group_id]['channels']:
+        return  # Нет привязанных каналов
 
     user_id = message.from_user.id
     for channel in data['groups'][group_id]['channels']:
