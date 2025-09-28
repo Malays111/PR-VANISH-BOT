@@ -239,7 +239,7 @@ HELP_TEXT = """❓ Помощь
 • ❓ Помощь - эта справка
 
 <b>Групповые команды (только для администраторов):</b>
-• /setup @username время - привязать канал с обязательной подпиской
+• /setup @channel время - привязать канал с обязательной подпиской к текущей группе
   Пример: /setup @mychannel 1h
 • /status - показать статус привязанных каналов
 • /unsetup - отвязать все каналы
@@ -247,10 +247,9 @@ HELP_TEXT = """❓ Помощь
   Пример: /unsetup @mychannel
 • /help - показать эту справку (только для админов в группах)
 
-<b>Команды для владельцев каналов (в личных сообщениях):</b>
-• /channel_status @username - показать статус канала
-• /unsetup_channel @username - отвязать канал от всех групп
-• /setup @username время - подготовить канал для привязки к группам
+<b>Команды для владельцев групп (в личных сообщениях):</b>
+• /setup @group время - привязать @likkerrochat к группе
+  Пример: /setup t.me/mygroup 1d
 
 <i>Время: 1h, 6h, 12h, 1d, 3d, 7d</i>"""
 
@@ -434,23 +433,14 @@ async def start_command(message: Message):
 # Команда для управления каналами (работает в группах и личных сообщениях)
 @dp.message(Command("setup"))
 async def setup_command(message: Message):
-    # Проверяем права пользователя в группе
-    if message.chat.type in ['group', 'supergroup']:
-        try:
-            user_member = await bot.get_chat_member(message.chat.id, message.from_user.id)
-            if user_member.status not in ['administrator', 'creator']:
-                await message.reply("❌ <b>Недостаточно прав!</b>\n\n🚫 Эта команда доступна только администраторам и создателю группы.\n\n💡 <b>Обратитесь к администратору группы</b> для настройки обязательной подписки.", parse_mode="HTML")
-                return
-        except Exception as e:
-            await message.reply("❌ <b>Ошибка проверки прав!</b>\n\nНе удалось проверить ваши права в группе.", parse_mode="HTML")
-            return
-
     args = message.text.split()
+
+    # Проверяем минимальное количество аргументов
     if len(args) < 3:
-        await message.reply("❌ Неверный формат команды!\n\n📝 <b>Правильное использование:</b>\n/setup @username время\n\n📋 <b>Примеры:</b>\n• /setup @mychannel 1h\n• /setup @mygroup 6h\n• /setup @testchannel 1d\n\n⏰ <b>Доступное время:</b>\n1h, 6h, 12h, 1d, 3d, 7d", parse_mode="HTML")
+        await message.reply("❌ Неверный формат команды!\n\n📝 <b>Правильное использование:</b>\n/setup @channel_or_group время\n\n📋 <b>Примеры:</b>\n• /setup @mychannel 1h (в группе - привязать канал к текущей группе)\n• /setup t.me/mygroup 1d (в личных - привязать @likkerrochat к группе)\n\n⏰ <b>Доступное время:</b>\n1h, 6h, 12h, 1d, 3d, 7d", parse_mode="HTML")
         return
 
-    channel = args[1]
+    channel_or_group = args[1]
     time_str = args[2]
 
     # Парсинг времени
@@ -477,27 +467,20 @@ async def setup_command(message: Message):
         await message.reply("❌ Неверный формат времени!\n\n📝 <b>Примеры:</b>\n• 3h - 3 часа\n• 1d - 1 день\n• 5d - 5 дней\n• never - бессрочное\n\n📋 <b>Пример:</b>\n/setup @mychannel 1d", parse_mode="HTML")
         return
 
-    # Определяем группу для привязки
     if message.chat.type in ['group', 'supergroup']:
-        # Проверяем, что бот является админом
-        bot_member = await bot.get_chat_member(message.chat.id, bot.id)
-        if not bot_member.status in ['administrator', 'creator']:
-            await message.reply("❌ <b>Бот не является администратором!</b>\n\n🤖 Бот должен быть администратором группы для работы с обязательной подпиской.\n\n💡 <b>Добавьте бота в администраторы группы</b> с правом удаления сообщений.", parse_mode="HTML")
-            return
+        # В группе: channel_or_group - канал, привязываем к текущей группе
+        channel = channel_or_group
 
-        target_group_id = str(message.chat.id)
-        if hours is None:
-            success_message = f"✅ Канал {channel} привязан к группе с обязательной подпиской навсегда."
-        else:
-            success_message = f"✅ Канал {channel} привязан к группе с обязательной подпиской на {time_str}."
-    else:
-        # Личные сообщения - пользователь должен быть владельцем канала
+        # Обрабатываем формат канала
+        if channel.startswith('t.me/'):
+            channel = '@' + channel.replace('t.me/', '')
+        elif channel.startswith('https://t.me/') or channel.startswith('http://t.me/'):
+            channel = '@' + channel.split('/')[-1]
+        elif not channel.startswith('@'):
+            channel = '@' + channel
+
+        # Проверяем канал
         try:
-            # Проверяем, является ли пользователь владельцем канала
-            if not channel.startswith('@'):
-                await message.reply("❌ Укажите канал в формате @username")
-                return
-
             channel_username = channel[1:]  # Убираем @
             channel_info = await bot.get_chat(f"@{channel_username}")
 
@@ -517,17 +500,84 @@ async def setup_command(message: Message):
                 await message.reply(f"❌ <b>Бот не имеет доступа к каналу!</b>\n\n🚫 Добавьте бота в канал {channel} как администратора.\n\n💡 <b>Убедитесь что канал существует и бот добавлен</b>.", parse_mode="HTML")
                 return
 
-            # Используем ID канала как group_id для хранения
-            target_group_id = str(channel_info.id)
-            if hours is None:
-                success_message = f"✅ Канал {channel} готов к привязке к группам навсегда!\n\n💡 <b>Теперь используйте команду в группе:</b>\n/setup {channel} {time_str}"
-            else:
-                success_message = f"✅ Канал {channel} готов к привязке к группам!\n\n💡 <b>Теперь используйте команду в группе:</b>\n/setup {channel} {time_str}"
-
         except Exception as e:
             await message.reply(f"❌ <b>Ошибка доступа к каналу!</b>\n\n🚫 Канал {channel} не найден или у вас нет доступа к нему.\n\n💡 <b>Убедитесь что:</b>\n• Канал существует\n• Вы являетесь администратором канала\n• Бот добавлен в канал как администратор", parse_mode="HTML")
             return
 
+        # Группа - текущая
+        target_group_id = str(message.chat.id)
+
+        # Проверяем, что бот является админом группы
+        bot_member = await bot.get_chat_member(message.chat.id, bot.id)
+        if not bot_member.status in ['administrator', 'creator']:
+            await message.reply("❌ <b>Бот не является администратором группы!</b>\n\n🤖 Бот должен быть администратором группы для работы с обязательной подпиской.\n\n💡 <b>Добавьте бота в администраторы группы</b> с правом удаления сообщений.", parse_mode="HTML")
+            return
+
+        if hours is None:
+            success_message = f"✅ Канал {channel} привязан к группе с обязательной подпиской навсегда."
+        else:
+            success_message = f"✅ Канал {channel} привязан к группе с обязательной подпиской на {time_str}."
+
+    else:
+        # В личных: channel_or_group - группа, привязываем @likkerrochat к этой группе
+        group = channel_or_group
+
+        # Обрабатываем формат группы
+        if group.startswith('t.me/'):
+            group = '@' + group.replace('t.me/', '')
+        elif group.startswith('https://t.me/') or group.startswith('http://t.me/'):
+            group = '@' + group.split('/')[-1]
+        elif not group.startswith('@'):
+            group = '@' + group
+
+        # Проверяем группу
+        try:
+            group_username = group[1:]  # Убираем @
+            group_info = await bot.get_chat(f"@{group_username}")
+
+            # Проверяем, что это группа или супергруппа
+            if group_info.type not in ['group', 'supergroup']:
+                await message.reply(f"❌ <b>{group} не является группой!</b>\n\n🚫 Укажите группу, а не канал или бота.\n\n💡 <b>Используйте:</b>\n• @groupname\n• t.me/groupname", parse_mode="HTML")
+                return
+
+            # Проверяем права пользователя в группе
+            user_member = await bot.get_chat_member(group_info.id, message.from_user.id)
+            if user_member.status not in ['administrator', 'creator']:
+                await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем группы {group} для настройки обязательной подписки.\n\n💡 <b>Получите права администратора</b> в группе.", parse_mode="HTML")
+                return
+
+            # Проверяем, что бот является админом группы
+            bot_member = await bot.get_chat_member(group_info.id, bot.id)
+            if not bot_member.status in ['administrator', 'creator']:
+                await message.reply(f"❌ <b>Бот не является администратором группы!</b>\n\n🤖 Бот должен быть администратором группы {group} для работы с обязательной подпиской.\n\n💡 <b>Добавьте бота в администраторы группы</b> с правом удаления сообщений.", parse_mode="HTML")
+                return
+
+        except Exception as e:
+            await message.reply(f"❌ <b>Ошибка доступа к группе!</b>\n\n🚫 Группа {group} не найдена или у вас нет доступа к ней.\n\n💡 <b>Убедитесь что:</b>\n• Группа существует\n• Вы являетесь администратором группы\n• Бот добавлен в группу как администратор", parse_mode="HTML")
+            return
+
+        # Канал - фиксированный @likkerrochat
+        channel = '@likkerrochat'
+
+        # Проверяем канал @likkerrochat
+        try:
+            channel_info = await bot.get_chat(channel)
+            bot_member = await bot.get_chat_member(channel_info.id, bot.id)
+            if bot_member.status not in ['administrator', 'creator']:
+                await message.reply("❌ <b>Бот не является администратором канала @likkerrochat!</b>\n\n🤖 Бот должен быть добавлен в канал @likkerrochat как администратор.", parse_mode="HTML")
+                return
+        except Exception as e:
+            await message.reply("❌ <b>Ошибка доступа к каналу @likkerrochat!</b>\n\n🚫 Канал не найден или бот не имеет доступа.", parse_mode="HTML")
+            return
+
+        target_group_id = str(group_info.id)
+
+        if hours is None:
+            success_message = f"✅ Канал @likkerrochat привязан к группе {group} с обязательной подпиской навсегда."
+        else:
+            success_message = f"✅ Канал @likkerrochat привязан к группе {group} с обязательной подпиской на {time_str}."
+
+    # Создаем обязательную подписку
     if hours is None:
         expiry = None
     else:
@@ -538,12 +588,15 @@ async def setup_command(message: Message):
         data['groups'][target_group_id] = {'channels': {}}
     data['groups'][target_group_id]['channels'][channel] = {'expiry': expiry.isoformat() if expiry else None, 'people': 0}
     save_data(data)
-    await message.reply(success_message)
+    await message.reply(success_message, parse_mode="HTML")
 
 @dp.message(Command("status"))
 async def status_command(message: Message):
+    # Админы бота могут использовать без проверки прав
+    if message.from_user.id == config.ADMIN_ID:
+        pass  # Пропустить проверку
     # Проверяем права пользователя в группе
-    if message.chat.type in ['group', 'supergroup']:
+    elif message.chat.type in ['group', 'supergroup']:
         try:
             user_member = await bot.get_chat_member(message.chat.id, message.from_user.id)
             if user_member.status not in ['administrator', 'creator']:
@@ -734,14 +787,26 @@ async def stoprassil_command(message: Message):
 
 @dp.message(Command("unsetup"))
 async def unsetup_command(message: Message):
+    # Админы бота могут использовать без проверки прав
+    if message.from_user.id == config.ADMIN_ID:
+        pass  # Пропустить проверку
     # Проверяем права пользователя в группе
-    if message.chat.type in ['group', 'supergroup']:
+    elif message.chat.type in ['group', 'supergroup']:
         try:
             user_member = await bot.get_chat_member(message.chat.id, message.from_user.id)
+            logging.info(f"User member object: {user_member}")
+            logging.info(f"User {message.from_user.id} status in group {message.chat.id}: {user_member.status}")
             if user_member.status not in ['administrator', 'creator']:
                 await message.reply("❌ <b>Недостаточно прав!</b>\n\n🚫 Эта команда доступна только администраторам и создателю группы.\n\n💡 <b>Обратитесь к администратору группы</b> для отвязки каналов.", parse_mode="HTML")
                 return
+
+            # Проверяем, что бот является админом группы
+            bot_member = await bot.get_chat_member(message.chat.id, bot.id)
+            if not bot_member.status in ['administrator', 'creator']:
+                await message.reply("❌ <b>Бот не является администратором группы!</b>\n\n🤖 Бот должен быть администратором группы для работы с обязательной подпиской.\n\n💡 <b>Добавьте бота в администраторы группы</b> с правом удаления сообщений.", parse_mode="HTML")
+                return
         except Exception as e:
+            logging.error(f"Error checking rights: {e}")
             await message.reply("❌ <b>Ошибка проверки прав!</b>\n\nНе удалось проверить ваши права в группе.", parse_mode="HTML")
             return
 
@@ -1251,15 +1316,17 @@ async def handle_callback(callback: CallbackQuery):
 @dp.message(Command("help"))
 async def help_command(message: Message):
     if message.chat.type in ['group', 'supergroup']:
-        # Проверяем права пользователя в группе
-        try:
-            user_member = await bot.get_chat_member(message.chat.id, message.from_user.id)
-            if user_member.status not in ['administrator', 'creator']:
-                await message.reply("❌ <b>Недостаточно прав!</b>\n\n🚫 Эта команда доступна только администраторам и создателю группы.\n\n💡 <b>Обратитесь к администратору группы</b> для получения справки.", parse_mode="HTML")
+        # Админы бота могут использовать без проверки прав
+        if message.from_user.id != config.ADMIN_ID:
+            # Проверяем права пользователя в группе
+            try:
+                user_member = await bot.get_chat_member(message.chat.id, message.from_user.id)
+                if user_member.status not in ['administrator', 'creator']:
+                    await message.reply("❌ <b>Недостаточно прав!</b>\n\n🚫 Эта команда доступна только администраторам и создателю группы.\n\n💡 <b>Обратитесь к администратору группы</b> для получения справки.", parse_mode="HTML")
+                    return
+            except Exception as e:
+                await message.reply("❌ <b>Ошибка проверки прав!</b>\n\nНе удалось проверить ваши права в группе.", parse_mode="HTML")
                 return
-        except Exception as e:
-            await message.reply("❌ <b>Ошибка проверки прав!</b>\n\nНе удалось проверить ваши права в группе.", parse_mode="HTML")
-            return
 
         # Показать команды для групп
         help_text = """🤖 <b>Команды для групп:</b>
