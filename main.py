@@ -522,6 +522,12 @@ async def setup_command(message: Message):
         # Группа - текущая
         target_group_id = str(message.chat.id)
 
+        # Проверяем права пользователя в группе
+        user_member = await bot.get_chat_member(message.chat.id, message.from_user.id)
+        if user_member.status not in ['administrator', 'creator']:
+            await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем группы для настройки обязательной подписки.\n\n💡 <b>Получите права администратора</b> в группе.", parse_mode="HTML")
+            return
+
         # Проверяем, что бот является админом группы
         bot_member = await bot.get_chat_member(message.chat.id, bot.id)
         if not bot_member.status in ['administrator', 'creator']:
@@ -592,8 +598,8 @@ async def setup_command(message: Message):
             channel_info = await bot.get_chat(f"@{channel_username}")
 
             # Проверяем права пользователя в канале
-            user_member = await bot.get_chat_member(channel_info.id, message.from_user.id)
-            if not user_member.status in ['administrator', 'creator']:
+            user_member_channel = await bot.get_chat_member(channel_info.id, message.from_user.id)
+            if user_member_channel.status not in ['administrator', 'creator']:
                 await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем канала {channel} для управления им.\n\n💡 <b>Получите права администратора</b> в канале.", parse_mode="HTML")
                 return
 
