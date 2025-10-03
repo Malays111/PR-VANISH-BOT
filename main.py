@@ -1466,13 +1466,13 @@ async def check_subscription(message: Message):
 
         username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
         channels_text = ", ".join(channel_list)
+        # Удалить сообщение пользователя сразу
+        await message.delete()
         await bot.send_message(
             message.chat.id,
             f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на каналы: {channels_text}",
-            reply_to_message_id=message.message_id,
             reply_markup=keyboard
         )
-        await message.delete()
         return
 
     # Проверка подписки на канал разработчика (из URLs), если бот там
