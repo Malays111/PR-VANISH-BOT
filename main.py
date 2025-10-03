@@ -1418,15 +1418,10 @@ async def check_subscription(message: Message):
     group_id = str(message.chat.id)
     if group_id not in data['groups']:
         data['groups'][group_id] = {'channels': {}}
-    # Очистить истекшие каналы
-    for channel in list(data['groups'][group_id]['channels'].keys()):
-        expiry_str = data['groups'][group_id]['channels'][channel]['expiry']
-        if expiry_str and datetime.fromisoformat(expiry_str) < datetime.now():
-            del data['groups'][group_id]['channels'][channel]
-            logging.info(f"Removed expired channel {channel} from group {group_id}")
-    save_data(data)
-    if not data['groups'][group_id]['channels']:
-        return  # Нет привязанных каналов
+    # Не удалять истекшие каналы, оставить для сохранения
+    active_channels = {ch: info for ch, info in data['groups'][group_id]['channels'].items() if not info['expiry'] or datetime.fromisoformat(info['expiry']) > datetime.now()}
+    if not active_channels:
+        return  # Нет активных привязанных каналов
 
     # Проверить, что бот может удалять сообщения
     bot_member = await bot.get_chat_member(message.chat.id, bot.id)
@@ -1460,7 +1455,7 @@ async def check_subscription(message: Message):
         keyboard_buttons = []
         channel_list = []
         for channel in unsubscribed_channels:
-            keyboard_buttons.append([InlineKeyboardButton(text=f"Подписаться на {channel}", url=f"https://t.me/{channel[1:]}")])
+            keyboard_buttons.append([InlineKeyboardButton(text="канал", url=f"https://t.me/{channel[1:]}")])
             channel_list.append(channel)
         keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
