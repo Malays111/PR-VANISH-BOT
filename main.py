@@ -540,7 +540,7 @@ async def setup_command(message: Message):
             success_message = f"✅ Канал {channel} привязан к группе с обязательной подпиской на {time_str}."
 
     else:
-        # В личных: channel_or_group - группа, привязываем @likkerrochat к этой группе
+        # В личных: channel_or_group - группа, привязываем к этой группе
         group = channel_or_group
 
         # Обрабатываем формат группы
@@ -1431,14 +1431,51 @@ async def check_subscription(message: Message):
         return  # Бот не может удалять сообщения
 
     user_id = message.from_user.id
+
+    # Проверка подписки на канал разработчика @vultetchat, если бот там
+    try:
+        dev_channel = "@vultetchat"
+        dev_member = await bot.get_chat_member(chat_id=dev_channel, user_id=bot.id)
+        if dev_member.status in ['member', 'administrator', 'creator']:
+            # Бот в канале разработчика, проверять подписку у всех
+            member = await bot.get_chat_member(chat_id=dev_channel, user_id=user_id)
+            if member.status not in ['member', 'administrator', 'creator']:
+                # Не подписан, отправить предупреждение и удалить сообщение
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(text="Канал", url=f"https://t.me/{dev_channel[1:]}")]]
+                )
+                username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
+                try:
+                    await bot.send_message(
+                        message.chat.id,
+                        f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {dev_channel}",
+                        reply_to_message_id=message.message_id,
+                        reply_markup=keyboard
+                    )
+                except Exception as e:
+                    logging.error(f"Error sending subscription message: {e}")
+                    # Отправить простое сообщение без форматирования
+                    try:
+                        await bot.send_message(
+                            message.chat.id,
+                            f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {dev_channel}",
+                            reply_to_message_id=message.message_id,
+                            reply_markup=keyboard
+                        )
+                    except:
+                        pass
+                await message.delete()
+                return
+    except Exception as e:
+        logging.error(f"Error checking dev channel subscription: {e}")
+        # Пропустить если ошибка
+
     for channel in data['groups'][group_id]['channels']:
         try:
             member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
             logging.info(f"User {user_id} status in {channel}: {member.status}")
             if member.status not in ['member', 'administrator', 'creator']:
-                # Не подписан, удалить сообщение
-                await message.delete()
-                # Отправить предупреждение
+                # Не подписан, отправить предупреждение и удалить сообщение
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[[InlineKeyboardButton(text="Канал", url=f"https://t.me/{channel[1:]}")]]
                 )
@@ -1447,6 +1484,7 @@ async def check_subscription(message: Message):
                     await bot.send_message(
                         message.chat.id,
                         f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {channel}",
+                        reply_to_message_id=message.message_id,
                         reply_markup=keyboard
                     )
                 except Exception as e:
@@ -1456,10 +1494,12 @@ async def check_subscription(message: Message):
                         await bot.send_message(
                             message.chat.id,
                             f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {channel}",
+                            reply_to_message_id=message.message_id,
                             reply_markup=keyboard
                         )
                     except:
                         pass
+                await message.delete()
                 return
         except Exception as e:
             logging.error(f"Error checking subscription for {channel}: {e}")
