@@ -1454,13 +1454,11 @@ async def check_subscription(message: Message):
                 )
                 username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
                 await message.delete()
-                asyncio.create_task(
-                    bot.send_message(
-                        message.chat.id,
-                        f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {channel}",
-                        reply_to_message_id=message.message_id,
-                        reply_markup=keyboard
-                    )
+                await bot.send_message(
+                    message.chat.id,
+                    f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {channel}",
+                    reply_to_message_id=message.message_id,
+                    reply_markup=keyboard
                 )
                 return
         except Exception as e:
@@ -1483,13 +1481,11 @@ async def check_subscription(message: Message):
                     )
                     username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
                     await message.delete()
-                    asyncio.create_task(
-                        bot.send_message(
-                            message.chat.id,
-                            f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {dev_channel}",
-                            reply_to_message_id=message.message_id,
-                            reply_markup=keyboard
-                        )
+                    await bot.send_message(
+                        message.chat.id,
+                        f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {dev_channel}",
+                        reply_to_message_id=message.message_id,
+                        reply_markup=keyboard
                     )
                     return
         except Exception as e:
