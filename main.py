@@ -248,7 +248,7 @@ HELP_TEXT = """❓ Помощь
 • /help - показать эту справку (только для админов в группах)
 
 <b>Команды для владельцев групп (в личных сообщениях):</b>
-• /setup @group время - привязать @likkerrochat к группе
+• /setup @group время - привязать канал к группе
   Пример: /setup t.me/mygroup 1d
 
 <i>Время: 1h, 6h, 12h, 1d, 3d, 7d</i>"""
@@ -452,7 +452,7 @@ async def setup_command(message: Message):
 
     # Проверяем минимальное количество аргументов
     if len(args) < 3:
-        await message.reply("❌ Неверный формат команды!\n\n📝 <b>Правильное использование:</b>\n/setup @channel_or_group время\n\n📋 <b>Примеры:</b>\n• /setup @mychannel 1h (в группе - привязать канал к текущей группе)\n• /setup t.me/mygroup 1d (в личных - привязать @likkerrochat к группе)\n\n⏰ <b>Доступное время:</b>\n1h, 6h, 12h, 1d, 3d, 7d", parse_mode="HTML")
+        await message.reply("❌ Неверный формат команды!\n\n📝 <b>Правильное использование:</b>\n/setup @channel время (в группе - привязать канал к текущей группе)\n/setup @group @channel время (в личных - привязать канал к группе)\n\n📋 <b>Примеры:</b>\n• /setup @mychannel 1h (в группе - привязать канал к текущей группе)\n• /setup @mygroup @mychannel 1d (в личных - привязать канал к группе)\n\n⏰ <b>Доступное время:</b>\n1h, 6h, 12h, 1d, 3d, 7d", parse_mode="HTML")
         return
 
     channel_or_group = args[1]
@@ -534,7 +534,7 @@ async def setup_command(message: Message):
             success_message = f"✅ Канал {channel} привязан к группе с обязательной подпиской на {time_str}."
 
     else:
-        # В личных: channel_or_group - группа, привязываем @vultetchat к этой группе
+        # В личных: channel_or_group - группа, привязываем @likkerrochat к этой группе
         group = channel_or_group
 
         # Обрабатываем формат группы
@@ -571,26 +571,52 @@ async def setup_command(message: Message):
             await message.reply(f"❌ <b>Ошибка доступа к группе!</b>\n\n🚫 Группа {group} не найдена или у вас нет доступа к ней.\n\n💡 <b>Убедитесь что:</b>\n• Группа существует\n• Вы являетесь администратором группы\n• Бот добавлен в группу как администратор", parse_mode="HTML")
             return
 
-        # Канал - фиксированный @vultetchat
-        channel = '@vultetchat'
+        # Канал - указывается пользователем как второй аргумент
+        if len(args) < 3:
+            await message.reply("❌ Неверный формат команды!\n\n📝 <b>Правильное использование:</b>\n/setup @group @channel время\n\n📋 <b>Примеры:</b>\n• /setup @mygroup @mychannel 1d\n• /setup t.me/mygroup @mychannel 1h\n\n⏰ <b>Доступное время:</b>\n1h, 6h, 12h, 1d, 3d, 7d", parse_mode="HTML")
+            return
 
-        # Проверяем канал @vultetchat
+        channel = args[2]
+
+        # Обрабатываем формат канала
+        if channel.startswith('t.me/'):
+            channel = '@' + channel.replace('t.me/', '')
+        elif channel.startswith('https://t.me/') or channel.startswith('http://t.me/'):
+            channel = '@' + channel.split('/')[-1]
+        elif not channel.startswith('@'):
+            channel = '@' + channel
+
+        # Проверяем канал
         try:
-            channel_info = await bot.get_chat(channel)
-            bot_member = await bot.get_chat_member(channel_info.id, bot.id)
-            if bot_member.status not in ['administrator', 'creator']:
-                await message.reply("❌ <b>Бот не является администратором канала @vultetchat!</b>\n\n🤖 Бот должен быть добавлен в канал @vultetchat как администратор.", parse_mode="HTML")
+            channel_username = channel[1:]  # Убираем @
+            channel_info = await bot.get_chat(f"@{channel_username}")
+
+            # Проверяем права пользователя в канале
+            user_member = await bot.get_chat_member(channel_info.id, message.from_user.id)
+            if not user_member.status in ['administrator', 'creator']:
+                await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем канала {channel} для управления им.\n\n💡 <b>Получите права администратора</b> в канале.", parse_mode="HTML")
                 return
+
+            # Проверяем, что бот добавлен в канал как администратор
+            try:
+                bot_member = await bot.get_chat_member(channel_info.id, bot.id)
+                if bot_member.status not in ['administrator', 'creator']:
+                    await message.reply(f"❌ <b>Бот не является администратором канала!</b>\n\n🤖 Бот должен быть добавлен в канал {channel} как администратор для работы с обязательной подпиской.\n\n💡 <b>Добавьте бота в канал как администратора</b>.", parse_mode="HTML")
+                    return
+            except Exception as e:
+                await message.reply(f"❌ <b>Бот не имеет доступа к каналу!</b>\n\n🚫 Добавьте бота в канал {channel} как администратора.\n\n💡 <b>Убедитесь что канал существует и бот добавлен</b>.", parse_mode="HTML")
+                return
+
         except Exception as e:
-            await message.reply("❌ <b>Ошибка доступа к каналу @vultetchat!</b>\n\n🚫 Канал не найден или бот не имеет доступа.", parse_mode="HTML")
+            await message.reply(f"❌ <b>Ошибка доступа к каналу!</b>\n\n🚫 Канал {channel} не найден или у вас нет доступа к нему.\n\n💡 <b>Убедитесь что:</b>\n• Канал существует\n• Вы являетесь администратором канала\n• Бот добавлен в канал как администратор", parse_mode="HTML")
             return
 
         target_group_id = str(group_info.id)
 
         if hours is None:
-            success_message = f"✅ Канал @vultetchat привязан к группе {group} с обязательной подпиской навсегда."
+            success_message = f"✅ Канал {channel} привязан к группе {group} с обязательной подпиской навсегда."
         else:
-            success_message = f"✅ Канал @vultetchat привязан к группе {group} с обязательной подпиской на {time_str}."
+            success_message = f"✅ Канал {channel} привязан к группе {group} с обязательной подпиской на {time_str}."
 
     # Создаем обязательную подписку
     if hours is None:
@@ -600,15 +626,8 @@ async def setup_command(message: Message):
 
     data = load_data()
     if target_group_id not in data['groups']:
-        data['groups'][target_group_id] = {'channels': {}, 'bots': {}}
-
+        data['groups'][target_group_id] = {'channels': {}}
     data['groups'][target_group_id]['channels'][channel] = {'expiry': expiry.isoformat() if expiry else None, 'people': 0}
-
-    # Автоматически добавить @likkerrochat если это группа
-    if message.chat.type in ['group', 'supergroup']:
-        if '@vultetchat' not in data['groups'][target_group_id]['channels']:
-            data['groups'][target_group_id]['channels']['@vultetchat'] = {'expiry': None, 'people': 0}
-
     save_data(data)
     await message.reply(success_message, parse_mode="HTML")
 
@@ -1381,7 +1400,16 @@ async def check_subscription(message: Message):
         return  # Админы не проверяются
     group_id = str(message.chat.id)
     if group_id not in data['groups']:
-        data['groups'][group_id] = {'channels': {}, 'bots': {}}
+        data['groups'][group_id] = {'channels': {}}
+    # Очистить истекшие каналы
+    for channel in list(data['groups'][group_id]['channels'].keys()):
+        expiry_str = data['groups'][group_id]['channels'][channel]['expiry']
+        if expiry_str and datetime.fromisoformat(expiry_str) < datetime.now():
+            del data['groups'][group_id]['channels'][channel]
+            logging.info(f"Removed expired channel {channel} from group {group_id}")
+    save_data(data)
+    if not data['groups'][group_id]['channels']:
+        return  # Нет привязанных каналов
 
     # Проверить, что бот может удалять сообщения
     bot_member = await bot.get_chat_member(message.chat.id, bot.id)
@@ -1395,21 +1423,6 @@ async def check_subscription(message: Message):
                 except:
                     pass
         return  # Бот не может удалять сообщения
-
-    # Автоматически добавить @likkerrochat если бот админ
-    if bot_member.status in ['administrator', 'creator'] and '@likkerrochat' not in data['groups'][group_id]['channels']:
-        data['groups'][group_id]['channels']['@vultetchat'] = {'expiry': None, 'people': 0}
-        save_data(data)
-
-    # Очистить истекшие каналы
-    for channel in list(data['groups'][group_id]['channels'].keys()):
-        expiry_str = data['groups'][group_id]['channels'][channel]['expiry']
-        if expiry_str and datetime.fromisoformat(expiry_str) < datetime.now():
-            del data['groups'][group_id]['channels'][channel]
-            logging.info(f"Removed expired channel {channel} from group {group_id}")
-    save_data(data)
-    if not data['groups'][group_id]['channels']:
-        return  # Нет привязанных каналов
 
     user_id = message.from_user.id
     for channel in data['groups'][group_id]['channels']:
@@ -1425,16 +1438,16 @@ async def check_subscription(message: Message):
                 )
                 username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
                 try:
-                    await message.answer(
-                        f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {channel}",
+                    await message.reply(
+                        f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: @vultetchat",
                         reply_markup=keyboard
                     )
                 except Exception as e:
                     logging.error(f"Error sending subscription message: {e}")
                     # Отправить простое сообщение без форматирования
                     try:
-                        await message.answer(
-                            f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {channel}",
+                        await message.reply(
+                            f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: @vultetchat",
                             reply_markup=keyboard
                         )
                     except:
