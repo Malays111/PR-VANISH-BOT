@@ -1442,29 +1442,38 @@ async def check_subscription(message: Message):
         return  # Бот не может удалять сообщения
 
     user_id = message.from_user.id
+    unsubscribed_channels = []
 
     for channel in data['groups'][group_id]['channels']:
         try:
             member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
             logging.info(f"User {user_id} status in {channel}: {member.status}")
             if member.status not in ['member', 'administrator', 'creator']:
-                # Не подписан, отправить предупреждение и удалить сообщение
-                keyboard = InlineKeyboardMarkup(
-                    inline_keyboard=[[InlineKeyboardButton(text="Канал", url=f"https://t.me/{channel[1:]}")]]
-                )
-                username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
-                await bot.send_message(
-                    message.chat.id,
-                    f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {channel}",
-                    reply_to_message_id=message.message_id,
-                    reply_markup=keyboard
-                )
-                await message.delete()
-                return
+                unsubscribed_channels.append(channel)
         except Exception as e:
             logging.error(f"Error checking subscription for {channel}: {e}")
             # Если канал не найден или бот не имеет доступа (например, приватный канал), пропустить проверку
             continue
+
+    if unsubscribed_channels:
+        # Создать клавиатуру с кнопками для каждого неподписанного канала
+        keyboard_buttons = []
+        channel_list = []
+        for channel in unsubscribed_channels:
+            keyboard_buttons.append([InlineKeyboardButton(text=f"Подписаться на {channel}", url=f"https://t.me/{channel[1:]}")])
+            channel_list.append(channel)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+
+        username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
+        channels_text = ", ".join(channel_list)
+        await bot.send_message(
+            message.chat.id,
+            f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на каналы: {channels_text}",
+            reply_to_message_id=message.message_id,
+            reply_markup=keyboard
+        )
+        await message.delete()
+        return
 
     # Проверка подписки на канал разработчика (из URLs), если бот там
     dev_channel = data.get('global_channel')
@@ -1475,19 +1484,7 @@ async def check_subscription(message: Message):
                 # Бот в канале разработчика, проверять подписку у всех
                 member = await bot.get_chat_member(chat_id=dev_channel, user_id=user_id)
                 if member.status not in ['member', 'administrator', 'creator']:
-                    # Не подписан, отправить предупреждение и удалить сообщение
-                    keyboard = InlineKeyboardMarkup(
-                        inline_keyboard=[[InlineKeyboardButton(text="Канал", url=f"https://t.me/{dev_channel[1:]}")]]
-                    )
-                    username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
-                    await bot.send_message(
-                        message.chat.id,
-                        f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {dev_channel}",
-                        reply_to_message_id=message.message_id,
-                        reply_markup=keyboard
-                    )
-                    await message.delete()
-                    return
+                    unsubscribed_channels.append(dev_channel)
         except Exception as e:
             logging.error(f"Error checking dev channel subscription: {e}")
             # Пропустить если ошибка
