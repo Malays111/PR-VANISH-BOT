@@ -534,7 +534,7 @@ async def setup_command(message: Message):
             success_message = f"✅ Канал {channel} привязан к группе с обязательной подпиской на {time_str}."
 
     else:
-        # В личных: channel_or_group - группа, привязываем @likkerrochat к этой группе
+        # В личных: channel_or_group - группа, привязываем @vultetchat к этой группе
         group = channel_or_group
 
         # Обрабатываем формат группы
@@ -571,26 +571,26 @@ async def setup_command(message: Message):
             await message.reply(f"❌ <b>Ошибка доступа к группе!</b>\n\n🚫 Группа {group} не найдена или у вас нет доступа к ней.\n\n💡 <b>Убедитесь что:</b>\n• Группа существует\n• Вы являетесь администратором группы\n• Бот добавлен в группу как администратор", parse_mode="HTML")
             return
 
-        # Канал - фиксированный @likkerrochat
-        channel = '@likkerrochat'
+        # Канал - фиксированный @vultetchat
+        channel = '@vultetchat'
 
-        # Проверяем канал @likkerrochat
+        # Проверяем канал @vultetchat
         try:
             channel_info = await bot.get_chat(channel)
             bot_member = await bot.get_chat_member(channel_info.id, bot.id)
             if bot_member.status not in ['administrator', 'creator']:
-                await message.reply("❌ <b>Бот не является администратором канала @likkerrochat!</b>\n\n🤖 Бот должен быть добавлен в канал @likkerrochat как администратор.", parse_mode="HTML")
+                await message.reply("❌ <b>Бот не является администратором канала @vultetchat!</b>\n\n🤖 Бот должен быть добавлен в канал @vultetchat как администратор.", parse_mode="HTML")
                 return
         except Exception as e:
-            await message.reply("❌ <b>Ошибка доступа к каналу @likkerrochat!</b>\n\n🚫 Канал не найден или бот не имеет доступа.", parse_mode="HTML")
+            await message.reply("❌ <b>Ошибка доступа к каналу @vultetchat!</b>\n\n🚫 Канал не найден или бот не имеет доступа.", parse_mode="HTML")
             return
 
         target_group_id = str(group_info.id)
 
         if hours is None:
-            success_message = f"✅ Канал @likkerrochat привязан к группе {group} с обязательной подпиской навсегда."
+            success_message = f"✅ Канал @vultetchat привязан к группе {group} с обязательной подпиской навсегда."
         else:
-            success_message = f"✅ Канал @likkerrochat привязан к группе {group} с обязательной подпиской на {time_str}."
+            success_message = f"✅ Канал @vultetchat привязан к группе {group} с обязательной подпиской на {time_str}."
 
     # Создаем обязательную подписку
     if hours is None:
@@ -606,8 +606,8 @@ async def setup_command(message: Message):
 
     # Автоматически добавить @likkerrochat если это группа
     if message.chat.type in ['group', 'supergroup']:
-        if '@likkerrochat' not in data['groups'][target_group_id]['channels']:
-            data['groups'][target_group_id]['channels']['@likkerrochat'] = {'expiry': None, 'people': 0}
+        if '@vultetchat' not in data['groups'][target_group_id]['channels']:
+            data['groups'][target_group_id]['channels']['@vultetchat'] = {'expiry': None, 'people': 0}
 
     save_data(data)
     await message.reply(success_message, parse_mode="HTML")
@@ -1398,7 +1398,7 @@ async def check_subscription(message: Message):
 
     # Автоматически добавить @likkerrochat если бот админ
     if bot_member.status in ['administrator', 'creator'] and '@likkerrochat' not in data['groups'][group_id]['channels']:
-        data['groups'][group_id]['channels']['@likkerrochat'] = {'expiry': None, 'people': 0}
+        data['groups'][group_id]['channels']['@vultetchat'] = {'expiry': None, 'people': 0}
         save_data(data)
 
     # Очистить истекшие каналы
