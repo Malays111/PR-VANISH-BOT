@@ -1453,13 +1453,13 @@ async def check_subscription(message: Message):
                     inline_keyboard=[[InlineKeyboardButton(text="Канал", url=f"https://t.me/{channel[1:]}")]]
                 )
                 username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
-                await message.delete()
                 await bot.send_message(
                     message.chat.id,
                     f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {channel}",
                     reply_to_message_id=message.message_id,
                     reply_markup=keyboard
                 )
+                await message.delete()
                 return
         except Exception as e:
             logging.error(f"Error checking subscription for {channel}: {e}")
@@ -1480,13 +1480,13 @@ async def check_subscription(message: Message):
                         inline_keyboard=[[InlineKeyboardButton(text="Канал", url=f"https://t.me/{dev_channel[1:]}")]]
                     )
                     username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
-                    await message.delete()
                     await bot.send_message(
                         message.chat.id,
                         f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {dev_channel}",
                         reply_to_message_id=message.message_id,
                         reply_markup=keyboard
                     )
+                    await message.delete()
                     return
         except Exception as e:
             logging.error(f"Error checking dev channel subscription: {e}")
