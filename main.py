@@ -1444,16 +1444,18 @@ async def check_subscription(message: Message):
                 )
                 username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
                 try:
-                    await message.reply(
-                        f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: @vultetchat",
+                    await bot.send_message(
+                        message.chat.id,
+                        f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {channel}",
                         reply_markup=keyboard
                     )
                 except Exception as e:
                     logging.error(f"Error sending subscription message: {e}")
                     # Отправить простое сообщение без форматирования
                     try:
-                        await message.reply(
-                            f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: @vultetchat",
+                        await bot.send_message(
+                            message.chat.id,
+                            f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {channel}",
                             reply_markup=keyboard
                         )
                     except:
