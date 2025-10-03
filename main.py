@@ -266,9 +266,15 @@ ADMIN_TEXT = """Админ-панель
 
 Отправьте команду."""
 
-admin_keyboard = InlineKeyboardMarkup(
-    inline_keyboard=[]
-)
+def create_admin_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="URLs", callback_data="urls")],
+            [InlineKeyboardButton(text="Назад", callback_data="back")]
+        ]
+    )
+
+admin_keyboard = create_admin_keyboard()
 
 # Глобальный кеш для клавиатур и данных
 keyboard_cache = {}
@@ -1306,6 +1312,11 @@ async def handle_callback(callback: CallbackQuery):
         await send_or_edit_message(callback.message.chat.id, msg_id, STATS_TEXT.format(total_users=total_users, users_today=users_today, total_groups=total_groups), reply_markup=back_keyboard, parse_mode="HTML")
     elif cb_data == "help":
         await send_or_edit_message(callback.message.chat.id, msg_id, HELP_TEXT, reply_markup=back_keyboard, parse_mode="HTML")
+    elif cb_data == "urls":
+        global_channel = data.get('global_channel', 'нету')
+        await send_or_edit_message(callback.message.chat.id, msg_id, f"📋 Текущие оп во всех каналах: {global_channel}\n\nОтправьте ссылку на канал для установки обязательной подписки.", reply_markup=back_keyboard)
+        data['users'][user_id]['current_screen'] = 'admin_urls'
+        save_data(data)
     elif cb_data == "my_subs":
         active_ads = data['users'][user_id].get('active_ads', [])
         # Очистить истекшие
@@ -1469,6 +1480,42 @@ async def check_subscription(message: Message):
     except Exception as e:
         logging.error(f"Error checking dev channel subscription: {e}")
         # Пропустить если ошибка
+
+    # Проверка подписки на глобальный канал
+    global_channel = data.get('global_channel')
+    if global_channel and global_channel.startswith('@'):
+        try:
+            member = await bot.get_chat_member(chat_id=global_channel, user_id=user_id)
+            if member.status not in ['member', 'administrator', 'creator']:
+                # Не подписан, отправить предупреждение и удалить сообщение
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(text="Канал", url=f"https://t.me/{global_channel[1:]}")]]
+                )
+                username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
+                try:
+                    await bot.send_message(
+                        message.chat.id,
+                        f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {global_channel}",
+                        reply_to_message_id=message.message_id,
+                        reply_markup=keyboard
+                    )
+                except Exception as e:
+                    logging.error(f"Error sending subscription message: {e}")
+                    # Отправить простое сообщение без форматирования
+                    try:
+                        await bot.send_message(
+                            message.chat.id,
+                            f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на канал: {global_channel}",
+                            reply_to_message_id=message.message_id,
+                            reply_markup=keyboard
+                        )
+                    except:
+                        pass
+                await message.delete()
+                return
+        except Exception as e:
+            logging.error(f"Error checking global channel subscription: {e}")
+            # Пропустить если ошибка
 
     for channel in data['groups'][group_id]['channels']:
         try:
@@ -1667,6 +1714,23 @@ async def handle_text(message: Message):
             await send_or_edit_message(message.chat.id, msg_id, f"✅ Админ {text} добавлен")
         else:
             await bot.send_message(message.chat.id, "❌ Неверный формат")
+    elif data['users'][user_id].get('current_screen') == 'admin_urls' and message.from_user.id == config.ADMIN_ID:
+        link = text.strip()
+        if link.startswith('@'):
+            converted = link
+        elif link.startswith('https://t.me/+'):
+            converted = link.replace('https://', '')
+        elif link.startswith('t.me/@'):
+            converted = '@' + link.split('@')[1]
+        elif link.startswith('t.me/'):
+            converted = '@' + link.split('/')[1]
+        else:
+            converted = '@' + link
+        data['global_channel'] = converted
+        save_data(data)
+        await send_or_edit_message(message.chat.id, msg_id, f"✅ Глобальный канал установлен: {converted}", reply_markup=admin_keyboard)
+        data['users'][user_id]['current_screen'] = None
+        save_data(data)
     elif text == "👥 Мои каналы":
         channels = data['users'][user_id]['channels']
         text = "👥 Мои каналы\n\nВаши каналы:"
