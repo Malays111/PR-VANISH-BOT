@@ -584,7 +584,13 @@ async def setup_command(message: Message):
 
             # Проверяем права пользователя в канале
             user_member = await bot.get_chat_member(channel_info.id, message.from_user.id)
-            if not user_member.status in ['administrator', 'creator']:
+            # Проверка по статусу ИЛИ по фактическим правам
+            is_admin_by_status = user_member.status in ['administrator', 'creator']
+            has_admin_rights = (hasattr(user_member, 'can_delete_messages') and user_member.can_delete_messages) or \
+                              (hasattr(user_member, 'can_pin_messages') and user_member.can_pin_messages) or \
+                              (hasattr(user_member, 'can_invite_users') and user_member.can_invite_users)
+
+            if not (is_admin_by_status or has_admin_rights):
                 await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем канала {channel} для управления им.\n\n💡 <b>Получите права администратора</b> в канале.", parse_mode="HTML")
                 return
 
@@ -607,7 +613,13 @@ async def setup_command(message: Message):
 
         # Проверяем права пользователя в группе
         user_member = await bot.get_chat_member(message.chat.id, message.from_user.id)
-        if user_member.status not in ['administrator', 'creator']:
+        # Проверка по статусу ИЛИ по фактическим правам
+        is_admin_by_status = user_member.status in ['administrator', 'creator']
+        has_admin_rights = (hasattr(user_member, 'can_delete_messages') and user_member.can_delete_messages) or \
+                          (hasattr(user_member, 'can_pin_messages') and user_member.can_pin_messages) or \
+                          (hasattr(user_member, 'can_invite_users') and user_member.can_invite_users)
+
+        if not (is_admin_by_status or has_admin_rights):
             await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем группы для настройки обязательной подписки.\n\n💡 <b>Получите права администратора</b> в группе.", parse_mode="HTML")
             return
 
@@ -646,7 +658,13 @@ async def setup_command(message: Message):
 
             # Проверяем права пользователя в группе
             user_member = await bot.get_chat_member(group_info.id, message.from_user.id)
-            if user_member.status not in ['administrator', 'creator']:
+            # Проверка по статусу ИЛИ по фактическим правам
+            is_admin_by_status = user_member.status in ['administrator', 'creator']
+            has_admin_rights = (hasattr(user_member, 'can_delete_messages') and user_member.can_delete_messages) or \
+                              (hasattr(user_member, 'can_pin_messages') and user_member.can_pin_messages) or \
+                              (hasattr(user_member, 'can_invite_users') and user_member.can_invite_users)
+
+            if not (is_admin_by_status or has_admin_rights):
                 await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем группы {group} для настройки обязательной подписки.\n\n💡 <b>Получите права администратора</b> в группе.", parse_mode="HTML")
                 return
 
@@ -682,7 +700,13 @@ async def setup_command(message: Message):
 
             # Проверяем права пользователя в канале
             user_member_channel = await bot.get_chat_member(channel_info.id, message.from_user.id)
-            if user_member_channel.status not in ['administrator', 'creator']:
+            # Проверка по статусу ИЛИ по фактическим правам
+            is_admin_by_status = user_member_channel.status in ['administrator', 'creator']
+            has_admin_rights = (hasattr(user_member_channel, 'can_delete_messages') and user_member_channel.can_delete_messages) or \
+                              (hasattr(user_member_channel, 'can_pin_messages') and user_member_channel.can_pin_messages) or \
+                              (hasattr(user_member_channel, 'can_invite_users') and user_member_channel.can_invite_users)
+
+            if not (is_admin_by_status or has_admin_rights):
                 await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем канала {channel} для управления им.\n\n💡 <b>Получите права администратора</b> в канале.", parse_mode="HTML")
                 return
 
@@ -707,15 +731,40 @@ async def setup_command(message: Message):
         else:
             success_message = f"✅ Канал {channel} привязан к группе {group} с обязательной подпиской на {time_str}."
 
+    # Проверяем, не привязан ли уже этот канал к группе
+    data = load_data()
+    if target_group_id not in data['groups']:
+        data['groups'][target_group_id] = {'channels': {}}
+
+    # Проверка на уже существующий канал
+    if channel in data['groups'][target_group_id]['channels']:
+        # Канал уже привязан - показываем информацию о текущей привязке
+        existing_info = data['groups'][target_group_id]['channels'][channel]
+        if existing_info['expiry']:
+            expiry_dt = datetime.fromisoformat(existing_info['expiry'])
+            remaining = expiry_dt - datetime.now()
+            days = remaining.days
+            hours_left = remaining.seconds // 3600
+            minutes_left = (remaining.seconds % 3600) // 60
+
+            if days > 0:
+                time_info = f"осталось {days} д {hours_left} ч"
+            elif hours_left > 0:
+                time_info = f"осталось {hours_left} ч {minutes_left} мин"
+            else:
+                time_info = f"осталось {minutes_left} мин"
+        else:
+            time_info = "навсегда"
+
+        await message.reply(f"❌ <b>Канал уже привязан!</b>\n\n📢 Канал {channel} уже установлен в этой группе.\n⏰ Срок действия: {time_info}\n👥 Подписок получено: {existing_info['people']}\n\n💡 <b>Используйте команду:</b>\n/unsetup {channel} <i>для отвязки канала</i>", parse_mode="HTML")
+        return
+
     # Создаем обязательную подписку
     if hours is None:
         expiry = None
     else:
         expiry = datetime.now() + timedelta(hours=hours)
 
-    data = load_data()
-    if target_group_id not in data['groups']:
-        data['groups'][target_group_id] = {'channels': {}}
     data['groups'][target_group_id]['channels'][channel] = {'expiry': expiry.isoformat() if expiry else None, 'people': 0}
     save_data(data)
     await message.reply(success_message, parse_mode="HTML")
@@ -729,7 +778,13 @@ async def status_command(message: Message):
     elif message.chat.type in ['group', 'supergroup']:
         try:
             user_member = await bot.get_chat_member(message.chat.id, message.from_user.id)
-            if user_member.status not in ['administrator', 'creator']:
+            # Проверка по статусу ИЛИ по фактическим правам
+            is_admin_by_status = user_member.status in ['administrator', 'creator']
+            has_admin_rights = (hasattr(user_member, 'can_delete_messages') and user_member.can_delete_messages) or \
+                              (hasattr(user_member, 'can_pin_messages') and user_member.can_pin_messages) or \
+                              (hasattr(user_member, 'can_invite_users') and user_member.can_invite_users)
+
+            if not (is_admin_by_status or has_admin_rights):
                 await message.reply("❌ <b>Недостаточно прав!</b>\n\n🚫 Эта команда доступна только администраторам и создателю группы.\n\n💡 <b>Обратитесь к администратору группы</b> для просмотра статуса.", parse_mode="HTML")
                 return
         except Exception as e:
@@ -926,7 +981,13 @@ async def unsetup_command(message: Message):
             user_member = await bot.get_chat_member(message.chat.id, message.from_user.id)
             logging.info(f"User member object: {user_member}")
             logging.info(f"User {message.from_user.id} status in group {message.chat.id}: {user_member.status}")
-            if user_member.status not in ['administrator', 'creator']:
+            # Проверка по статусу ИЛИ по фактическим правам
+            is_admin_by_status = user_member.status in ['administrator', 'creator']
+            has_admin_rights = (hasattr(user_member, 'can_delete_messages') and user_member.can_delete_messages) or \
+                              (hasattr(user_member, 'can_pin_messages') and user_member.can_pin_messages) or \
+                              (hasattr(user_member, 'can_invite_users') and user_member.can_invite_users)
+
+            if not (is_admin_by_status or has_admin_rights):
                 await message.reply("❌ <b>Недостаточно прав!</b>\n\n🚫 Эта команда доступна только администраторам и создателю группы.\n\n💡 <b>Обратитесь к администратору группы</b> для отвязки каналов.", parse_mode="HTML")
                 return
 
@@ -962,7 +1023,13 @@ async def unsetup_command(message: Message):
             channel_username = channel[1:]
             channel_info = await bot.get_chat(f"@{channel_username}")
             user_member = await bot.get_chat_member(channel_info.id, message.from_user.id)
-            if not user_member.status in ['administrator', 'creator']:
+            # Проверка по статусу ИЛИ по фактическим правам
+            is_admin_by_status = user_member.status in ['administrator', 'creator']
+            has_admin_rights = (hasattr(user_member, 'can_delete_messages') and user_member.can_delete_messages) or \
+                              (hasattr(user_member, 'can_pin_messages') and user_member.can_pin_messages) or \
+                              (hasattr(user_member, 'can_invite_users') and user_member.can_invite_users)
+
+            if not (is_admin_by_status or has_admin_rights):
                 await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем канала {channel}.\n\n💡 <b>Получите права администратора</b> в канале.", parse_mode="HTML")
                 return
 
@@ -1013,7 +1080,13 @@ async def unsetup_command(message: Message):
         
                 # Проверяем права пользователя в канале
                 user_member = await bot.get_chat_member(channel_info.id, message.from_user.id)
-                if not user_member.status in ['administrator', 'creator']:
+                # Проверка по статусу ИЛИ по фактическим правам
+                is_admin_by_status = user_member.status in ['administrator', 'creator']
+                has_admin_rights = (hasattr(user_member, 'can_delete_messages') and user_member.can_delete_messages) or \
+                                  (hasattr(user_member, 'can_pin_messages') and user_member.can_pin_messages) or \
+                                  (hasattr(user_member, 'can_invite_users') and user_member.can_invite_users)
+
+                if not (is_admin_by_status or has_admin_rights):
                     await message.reply(f"❌ Вы должны быть администратором или создателем канала {channel}.")
                     return
         
@@ -1060,7 +1133,13 @@ async def unsetup_command(message: Message):
         
                 # Проверяем права пользователя в канале
                 user_member = await bot.get_chat_member(channel_info.id, message.from_user.id)
-                if not user_member.status in ['administrator', 'creator']:
+                # Проверка по статусу ИЛИ по фактическим правам
+                is_admin_by_status = user_member.status in ['administrator', 'creator']
+                has_admin_rights = (hasattr(user_member, 'can_delete_messages') and user_member.can_delete_messages) or \
+                                  (hasattr(user_member, 'can_pin_messages') and user_member.can_pin_messages) or \
+                                  (hasattr(user_member, 'can_invite_users') and user_member.can_invite_users)
+
+                if not (is_admin_by_status or has_admin_rights):
                     await message.reply(f"❌ Вы должны быть администратором или создателем канала {channel}.")
                     return
         
@@ -1456,7 +1535,13 @@ async def help_command(message: Message):
             # Проверяем права пользователя в группе
             try:
                 user_member = await bot.get_chat_member(message.chat.id, message.from_user.id)
-                if user_member.status not in ['administrator', 'creator']:
+                # Проверка по статусу ИЛИ по фактическим правам
+                is_admin_by_status = user_member.status in ['administrator', 'creator']
+                has_admin_rights = (hasattr(user_member, 'can_delete_messages') and user_member.can_delete_messages) or \
+                                  (hasattr(user_member, 'can_pin_messages') and user_member.can_pin_messages) or \
+                                  (hasattr(user_member, 'can_invite_users') and user_member.can_invite_users)
+
+                if not (is_admin_by_status or has_admin_rights):
                     await message.reply("❌ <b>Недостаточно прав!</b>\n\n🚫 Эта команда доступна только администраторам и создателю группы.\n\n💡 <b>Обратитесь к администратору группы</b> для получения справки.", parse_mode="HTML")
                     return
             except Exception as e:
