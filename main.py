@@ -689,17 +689,7 @@ async def setup_command(message: Message):
             channel_username = channel[1:]  # Убираем @
             channel_info = await bot.get_chat(f"@{channel_username}")
 
-            # Проверяем права пользователя в канале
-            user_member_channel = await bot.get_chat_member(channel_info.id, message.from_user.id)
-            # Проверка по статусу ИЛИ по фактическим правам
-            is_admin_by_status = user_member_channel.status in ['administrator', 'creator']
-            has_admin_rights = (hasattr(user_member_channel, 'can_delete_messages') and user_member_channel.can_delete_messages) or \
-                              (hasattr(user_member_channel, 'can_pin_messages') and user_member_channel.can_pin_messages) or \
-                              (hasattr(user_member_channel, 'can_invite_users') and user_member_channel.can_invite_users)
-
-            if not (is_admin_by_status or has_admin_rights):
-                await message.reply(f"❌ <b>Недостаточно прав!</b>\n\n🚫 Вы должны быть администратором или создателем канала {channel} для управления им.\n\n💡 <b>Получите права администратора</b> в канале.", parse_mode="HTML")
-                return
+            # Проверка прав в канале убрана - любой канал где есть бот
 
             # Проверяем, что бот добавлен в канал как администратор
             try:
