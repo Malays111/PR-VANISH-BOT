@@ -451,6 +451,83 @@ async def start_command(message: Message):
     data['users'][str(user_id)]['message_id'] = msg_id
     save_data(data)
 
+# Функция для повторной отправки сообщения после подписки
+async def resend_pending_message(user_id: str, group_id: str, bot: Bot):
+    """Повторно отправить сохраненное сообщение пользователя после подписки"""
+    data = load_data()
+
+    # Найти последнее сообщение пользователя в этой группе
+    user_pending_messages = [
+        (key, msg_data) for key, msg_data in data.get('pending_messages', {}).items()
+        if msg_data['user_id'] == user_id and msg_data['group_id'] == group_id
+    ]
+
+    if not user_pending_messages:
+        return False, "❌ У вас нет сохраненных сообщений для повторной отправки."
+
+    # Получить последнее сообщение
+    latest_message_key, message_data = max(user_pending_messages, key=lambda x: x[1]['timestamp'])
+
+    try:
+        # Проверить, что пользователь все еще подписан на требуемые каналы
+        current_unsubscribed = []
+        for channel in message_data['unsubscribed_channels']:
+            try:
+                member = await bot.get_chat_member(chat_id=channel, user_id=int(user_id))
+                if member.status not in ['member', 'administrator', 'creator']:
+                    current_unsubscribed.append(channel)
+            except Exception as e:
+                logging.error(f"Error checking subscription for {channel}: {e}")
+                current_unsubscribed.append(channel)
+
+        if current_unsubscribed:
+            channels_text = ", ".join(current_unsubscribed)
+            return False, f"❌ Вы все еще не подписаны на каналы: {channels_text}\n\nПодпишитесь на все каналы и попробуйте снова."
+
+        # Отправить сообщение
+        if message_data['message_type'] == 'text':
+            await bot.send_message(
+                int(group_id),
+                f"{message_data['message_text']}\n\n<i>📝 Это сообщение было отправлено с помощью команды /resend</i>",
+                parse_mode="HTML"
+            )
+        else:
+            await bot.send_message(
+                int(group_id),
+                f"[Медиа сообщение]\n\n<i>📝 Это сообщение было отправлено с помощью команды /resend</i>",
+                parse_mode="HTML"
+            )
+
+        # Удалить использованное сообщение из pending
+        if 'pending_messages' in data and latest_message_key in data['pending_messages']:
+            del data['pending_messages'][latest_message_key]
+            save_data(data)
+
+        return True, "✅ Ваше сообщение успешно отправлено!"
+
+    except Exception as e:
+        logging.error(f"Error resending message: {e}")
+        return False, "❌ Произошла ошибка при отправке сообщения. Попробуйте позже."
+
+# Команда для повторной отправки сообщения
+@dp.message(Command("resend"))
+async def resend_command(message: Message):
+    if message.chat.type not in ['group', 'supergroup']:
+        await message.reply("❌ Эта команда работает только в группах.")
+        return
+
+    user_id = str(message.from_user.id)
+    group_id = str(message.chat.id)
+
+    success, response = await resend_pending_message(user_id, group_id, bot)
+
+    if success:
+        await message.reply(response, parse_mode="HTML")
+        # Удалить команду пользователя
+        await message.delete()
+    else:
+        await message.reply(response, parse_mode="HTML")
+
 # Команда для управления каналами (работает в группах и личных сообщениях)
 @dp.message(Command("setup"))
 async def setup_command(message: Message):
@@ -1461,13 +1538,103 @@ async def check_subscription(message: Message):
 
         username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
         channels_text = ", ".join(channel_list)
-        # Удалить сообщение пользователя сразу
+
+        # Сохранить статистику об удаленном сообщении и само сообщение для повторной отправки
+        data = load_data()
+        group_id = str(message.chat.id)
+        user_id = str(message.from_user.id)
+        today = date.today().isoformat()
+
+        # Инициализировать статистику если не существует
+        if 'deleted_messages_stats' not in data:
+            data['deleted_messages_stats'] = {}
+
+        if group_id not in data['deleted_messages_stats']:
+            data['deleted_messages_stats'][group_id] = {
+                'total_deleted': 0,
+                'daily_stats': {},
+                'channel_stats': {}
+            }
+
+        # Обновить общую статистику
+        data['deleted_messages_stats'][group_id]['total_deleted'] += 1
+
+        # Обновить статистику по дням
+        if today not in data['deleted_messages_stats'][group_id]['daily_stats']:
+            data['deleted_messages_stats'][group_id]['daily_stats'][today] = 0
+        data['deleted_messages_stats'][group_id]['daily_stats'][today] += 1
+
+        # Обновить статистику по каналам
+        for channel in unsubscribed_channels:
+            if channel not in data['deleted_messages_stats'][group_id]['channel_stats']:
+                data['deleted_messages_stats'][group_id]['channel_stats'][channel] = 0
+            data['deleted_messages_stats'][group_id]['channel_stats'][channel] += 1
+
+        # Сохранить удаленное сообщение для повторной отправки
+        if 'pending_messages' not in data:
+            data['pending_messages'] = {}
+
+        message_key = f"{group_id}_{user_id}_{int(datetime.now().timestamp())}"
+        data['pending_messages'][message_key] = {
+            'user_id': user_id,
+            'group_id': group_id,
+            'message_text': message.text if message.text else "[Медиа сообщение]",
+            'message_type': 'text' if message.text else 'media',
+            'timestamp': datetime.now().isoformat(),
+            'unsubscribed_channels': unsubscribed_channels.copy()
+        }
+
+        save_data(data)
+
+        # Создать улучшенное уведомление с дополнительной информацией
+        if len(unsubscribed_channels) == 1:
+            channel_text = f"канал {channels_text}"
+            subscribe_text = "на канал"
+        else:
+            channel_text = f"каналы: {channels_text}"
+            subscribe_text = "на каналы"
+
+        # Определить, является ли это приватным каналом или публичным
+        is_private_channels = any(not channel.startswith('@') for channel in unsubscribed_channels)
+
+        additional_info = ""
+        if is_private_channels:
+            additional_info = "\n\n💡 <i>Если канал приватный, попросите администратора добавить вас в подписчики.</i>"
+
+        notification_text = f"""🚫 <b>Сообщение не может быть отправлено</b>
+
+Пользователь {username} пытался написать сообщение, но для участия в этом чате необходимо подписаться {subscribe_text}:
+
+📢 {channel_text}{additional_info}
+
+✅ <b>После подписки:</b>
+• Напишите команду <code>/resend</code> для повторной отправки вашего сообщения
+• Или просто напишите новое сообщение - оно будет опубликовано автоматически
+• Проверка подписки происходит мгновенно
+
+<i>Подпишитесь на указанные каналы и используйте команду /resend!</i>"""
+
+        # Сначала ответить на сообщение пользователя, затем удалить его
+        try:
+            await bot.send_message(
+                message.chat.id,
+                notification_text,
+                reply_to_message_id=message.message_id,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logging.warning(f"Failed to reply to message: {e}")
+            # Fallback - отправить обычное сообщение
+            await bot.send_message(
+                message.chat.id,
+                notification_text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+
+        # Удалить сообщение пользователя после отправки ответа
         await message.delete()
-        await bot.send_message(
-            message.chat.id,
-            f"Пользователь {username} написал сообщение, но чтобы писать в чат, необходимо подписаться на каналы: {channels_text}",
-            reply_markup=keyboard
-        )
         return
 
     # Проверка подписки на канал разработчика (из URLs), если бот там
@@ -1755,6 +1922,29 @@ async def send_broadcast():
                     await bot.forward_message(chat_id=int(group_id), from_chat_id=msg['chat_id'], message_id=msg['message_id'])
                 except Exception as e:
                     logging.error(f"Error forwarding to {group_id}: {e}")
+
+        # Очистка старых pending сообщений (старше 24 часов)
+        if 'pending_messages' in data:
+            current_time = datetime.now()
+            expired_messages = []
+            for message_key, message_data in data['pending_messages'].items():
+                try:
+                    message_time = datetime.fromisoformat(message_data['timestamp'])
+                    if (current_time - message_time).total_seconds() > 24 * 3600:  # 24 часа
+                        expired_messages.append(message_key)
+                except:
+                    # Если не удается распарсить время, удалить сообщение
+                    expired_messages.append(message_key)
+
+            # Удалить истекшие сообщения
+            for message_key in expired_messages:
+                if message_key in data['pending_messages']:
+                    del data['pending_messages'][message_key]
+
+            if expired_messages:
+                save_data(data)
+                logging.info(f"Cleaned up {len(expired_messages)} expired pending messages")
+
         await asyncio.sleep(150)  # 2.5 минуты
 
 # Запуск бота
